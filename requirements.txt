@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+transformers>=4.44.0
+datasets
+torch
+pydantic
+python-multipart
+seqeval
+accelerate
+evaluate
