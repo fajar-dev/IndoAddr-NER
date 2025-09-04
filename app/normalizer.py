@@ -70,12 +70,13 @@ def normalize_components(ents: List[Dict]) -> Dict:
         elif label == "RT":
             m = re.search(r"(\d+)", text)
             if m:
-                out["rt"] = m.group(1).zfill(3)
+                out["rt"] = m.group(1)  
 
         elif label == "RW":
             m = re.search(r"(\d+)", text)
             if m:
-                out["rw"] = m.group(1).zfill(3)
+                out["rw"] = m.group(1) 
+
 
         elif label == "POSTALCODE":
             m = re.search(r"\d{5}", text)
