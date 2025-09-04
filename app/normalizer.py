@@ -1,21 +1,57 @@
 import re
-from typing import List, Dict
+from typing import List, Dict, Optional
 
-# simple titlecase but preserve known acronyms
+# Known acronyms that should be preserved in uppercase
 _ACRONYMS = {"RT", "RW", "DKI", "DIY"}
 
-def titlecase_keep(s: str) -> str:
-    parts = s.split()
-    out = []
-    for p in parts:
-        if p.upper() in _ACRONYMS:
-            out.append(p.upper())
-        else:
-            out.append(p[:1].upper() + p[1:].lower() if p else p)
-    return " ".join(out)
+# Roman numerals that should stay uppercase
+_ROMAN_NUMERALS = {
+    "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
+    "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"
+}
 
-def normalize_components(ents: List[Dict]) -> Dict:
-    out = {
+
+def _titlecase_with_acronyms(text: str) -> str:
+    """Convert to title case but keep known acronyms in uppercase."""
+    return " ".join(
+        word.upper() if word.upper() in _ACRONYMS
+        else word.capitalize()
+        for word in text.split()
+    )
+
+
+def _titlecase_with_romans(text: str) -> str:
+    """Titlecase text while preserving roman numerals in uppercase."""
+    return " ".join(
+        word.upper() if word.upper() in _ROMAN_NUMERALS else word.capitalize()
+        for word in text.split()
+    )
+
+
+def _extract_number(text: str) -> Optional[str]:
+    """Extract first sequence of digits from text."""
+    match = re.search(r"(\d+)", text)
+    return match.group(1) if match else None
+
+
+def _extract_postalcode(text: str) -> Optional[str]:
+    """Extract 5-digit postal code from text."""
+    match = re.search(r"\b\d{5}\b", text)
+    return match.group(0) if match else None
+
+
+def normalize_components(ents: List[Dict]) -> Dict[str, Optional[str]]:
+    """
+    Normalize named entity components into structured address parts.
+
+    Args:
+        ents: List of entity dicts, each containing keys like 'entity' or 'entity_group',
+              and 'text' or 'word'.
+
+    Returns:
+        Dict with normalized address components.
+    """
+    components = {
         "province": None,
         "city": None,
         "district": None,
@@ -23,64 +59,42 @@ def normalize_components(ents: List[Dict]) -> Dict:
         "street": None,
         "rt": None,
         "rw": None,
-        "postalcode": None
+        "postalcode": None,
     }
-    for e in ents:
-        label = e.get("entity_group") or e.get("entity")  # support different pipeline outputs
-        text = e.get("word") or e.get("text") or ""
-        text = text.strip(" ,.;")
+
+    for ent in ents:
+        label = ent.get("entity_group") or ent.get("entity")
+        text = (ent.get("word") or ent.get("text") or "").strip(" ,.;")
+
+        if not text or not label:
+            continue
 
         if label == "PROVINCE":
-            out["province"] = titlecase_keep(text)
+            components["province"] = _titlecase_with_acronyms(text)
 
         elif label == "CITY":
-            out["city"] = titlecase_keep(text)
+            components["city"] = _titlecase_with_acronyms(text)
 
         elif label == "DISTRICT":
-            words = text.split()
-            new_words = []
-            for word in words:
-                if word.upper() in {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
-                                    "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"}:
-                    new_words.append(word.upper())
-                else:
-                    new_words.append(word.capitalize())
-            out["district"] = " ".join(new_words)
+            components["district"] = _titlecase_with_romans(text)
 
         elif label == "VILLAGE":
-            words = text.split()
-            new_words = []
-            for word in words:
-                if word.upper() in {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X",
-                                    "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII", "XIX", "XX"}:
-                    new_words.append(word.upper())
-                else:
-                    new_words.append(word.capitalize())
-            out["village"] = " ".join(new_words)
-
+            components["village"] = _titlecase_with_romans(text)
 
         elif label in {"STREET", "BLOCK", "HAMLET"}:
-            text = titlecase_keep(text)
-            
-            if out["street"]:
-                out["street"] += " " + text
-            else:
-                out["street"] = text
+            street_part = _titlecase_with_romans(text)
+            components["street"] = (
+                f"{components['street']} {street_part}".strip()
+                if components["street"] else street_part
+            )
 
         elif label == "RT":
-            m = re.search(r"(\d+)", text)
-            if m:
-                out["rt"] = m.group(1)  
+            components["rt"] = _extract_number(text)
 
         elif label == "RW":
-            m = re.search(r"(\d+)", text)
-            if m:
-                out["rw"] = m.group(1) 
-
+            components["rw"] = _extract_number(text)
 
         elif label == "POSTALCODE":
-            m = re.search(r"\d{5}", text)
-            if m:
-                out["postalcode"] = m.group(0)
+            components["postalcode"] = _extract_postalcode(text)
 
-    return out
+    return components
