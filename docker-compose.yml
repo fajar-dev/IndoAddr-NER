@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  indoaddr-app:
+    build: .
+    container_name: indoaddr_app
+    ports:
+      - "8000:8000"
+    volumes:
+      # mount model dari host ke container
+      - /home/fajar/IndoAddr-NER/models:/app/models
+      # (opsional) kalau mau kode ikut di-mount untuk development:
+      # - .:/app
+    restart: unless-stopped
